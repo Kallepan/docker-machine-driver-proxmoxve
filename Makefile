@@ -41,7 +41,7 @@ create-machine: remove-machine-forcefully clean build install
     --proxmoxve-vm-clone-vmid $$PVE_CLONE_VMID \
     --proxmoxve-vm-memory 8 \
     --proxmoxve-ssh-username $$PVE_SSH_USER \
-    --proxmoxve-ssh-password $$PVE_PASSWD \
+    --proxmoxve-ssh-password $$PVE_SSH_PASSWD \
     --proxmoxve-vm-vmid-range "8500:9500" \
     --proxmoxve-debug-driver \
     $$VM_NAME
