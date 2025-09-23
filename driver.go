@@ -686,9 +686,13 @@ func (d *Driver) Create() error {
 	if err4 != nil {
 		return err4
 	}
-	err5 := vm.ResizeDisk(context.Background(), "scsi0", d.DiskSize+"G")
+	rtask, err5 := vm.ResizeDisk(context.Background(), "scsi0", d.DiskSize+"G")
 	if err5 != nil {
 		return err5
+	}
+
+	if err := rtask.Wait(context.Background(), d.taskInterval, d.taskTimeout); err != nil {
+		return err
 	}
 
 	d.debugf("add misc configuration options")
