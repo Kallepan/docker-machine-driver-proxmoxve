@@ -4,9 +4,17 @@ import (
 	"os"
 	"testing"
 
+	"github.com/deepshore/docker-machine-driver-proxmoxve/internal/logger"
 	"github.com/luthermonson/go-proxmox"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestMain(m *testing.M) {
+	logger.Init()
+	defer logger.CallBackOnExit()
+
+	os.Exit(m.Run())
+}
 
 func createDriver() *Driver {
 	newDriver := NewDriver("default", "")
