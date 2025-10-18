@@ -837,32 +837,41 @@ func (d *Driver) Remove() error {
 		return err
 	}
 
-	stopTask, err2 := vm.Stop(context.Background())
-	if err2 != nil {
-		return err2
+	stopTask, err := vm.Stop(context.Background())
+	if err != nil {
+		return err
 	}
 	// wait for the stop task
-	vmStoppedStatus, vmStoppedCompleted, vmStoppedErr := stopTask.WaitForCompleteStatus(context.Background(), int(d.taskTimeout.Seconds()))
-	if vmStoppedErr != nil {
-		return vmStoppedErr
+	vmStoppedStatus, vmStoppedCompleted, err := stopTask.WaitForCompleteStatus(context.Background(), int(d.taskTimeout.Seconds()))
+	if err != nil {
+		return err
 	}
 
 	d.debugf("VM stopped status: %s", vmStoppedStatus)
 	d.debugf("VM stop completed: %s", vmStoppedCompleted)
 
-	deleteTask, err4 := vm.Delete(context.Background())
-	if err4 != nil {
-		return err4
+	deleteTask, err := vm.Delete(context.Background())
+	if err != nil {
+		return err
 	}
 
 	// wait for the delete task
-	vmDelStatus, vmDelCompleted, vmDelErr := deleteTask.WaitForCompleteStatus(context.Background(), int(d.taskTimeout.Seconds()))
-	if vmDelErr != nil {
-		return vmDelErr
-	}
+	maxDeleteRetries := 5
+	for i := range maxDeleteRetries {
+		d.debugf("Waiting for VM delete to complete, attempt %d of %d", i+1, maxDeleteRetries)
+		// WTF? https://github.com/luthermonson/go-proxmox/blob/v0.2.3/tasks.go#L173
+		vmDelStatus, vmDelCompleted, err := deleteTask.WaitForCompleteStatus(context.Background(), int(d.taskTimeout.Seconds()))
 
-	d.debugf("VM delete status: %s", vmDelStatus)
-	d.debugf("VM delete completed: %s", vmDelCompleted)
+		// Check if the VM was deleted successfully
+		if err == nil && vmDelCompleted && vmDelStatus {
+			d.debugf("VM delete status: %s", vmDelStatus)
+			d.debugf("VM delete completed: %s", vmDelCompleted)
+			return nil
+		}
+
+		d.debugf("VM delete not completed yet, retrying...")
+		time.Sleep(5 * time.Second) // Suspend for before retrying
+	}
 
 	return nil
 }
