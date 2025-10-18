@@ -13,8 +13,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/deepshore/docker-machine-driver-proxmoxve/internal/logger"
 	"github.com/labstack/gommon/log"
 	"github.com/luthermonson/go-proxmox"
+	"go.uber.org/zap"
 
 	"github.com/rancher/machine/libmachine/drivers"
 	"github.com/rancher/machine/libmachine/mcnflag"
@@ -85,18 +87,6 @@ func NewDriver(hostName, storePath string) drivers.Driver {
 			StorePath:   storePath,
 		},
 		Citype: "nocloud", // default to nocloud since this driver will only support linux
-	}
-}
-
-func (d *Driver) debugf(format string, v ...interface{}) {
-	if d.driverDebug {
-		log.Infof(format, v...)
-	}
-}
-
-func (d *Driver) debug(v ...interface{}) {
-	if d.driverDebug {
-		log.Info(v...)
 	}
 }
 
@@ -350,7 +340,7 @@ func (d *Driver) DriverName() string {
 
 // SetConfigFromFlags configures all command line arguments
 func (d *Driver) SetConfigFromFlags(flags drivers.DriverOptions) error {
-	d.debug("SetConfigFromFlags called")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("SetConfigFromFlags called")
 
 	// PROXMOX API Connection settings
 	d.Host = flags.String("proxmoxve-proxmox-host")
@@ -447,7 +437,8 @@ func (d *Driver) GetNode(nodeName string) (*proxmox.Node, error) {
 }
 
 func (d *Driver) ConfigureVM(name string, value string) error {
-	d.debugf("ConfigureVM: %s %s", name, value)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("ConfigureVM called", zap.String("name", name), zap.String("value", value))
+
 	vm, err := d.GetVM()
 	if err != nil {
 		return err
@@ -467,7 +458,7 @@ func (d *Driver) ConfigureVM(name string, value string) error {
 		return err4
 	}
 
-	d.debugf("Config task finished")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("Config task finished")
 
 	return nil
 }
@@ -529,13 +520,13 @@ func (d *Driver) OperateVM(operation string) error {
 }
 
 func (d *Driver) GetVM() (*proxmox.VirtualMachine, error) {
-	d.debugf("GetVM issued")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("GetVM issued")
 	if d.VMID < 1 {
 		return nil, errors.New("invalid VMID")
 	}
 
 	n, err := d.GetNode(d.Node)
-	d.debugf("GetNode returned: '%s' PVEVersion: '%s'", n.Name, n.PVEVersion)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("GetNode returned", zap.String("name", n.Name), zap.String("PVEVersion", n.PVEVersion))
 	if err != nil {
 		return nil, err
 	}
@@ -543,7 +534,7 @@ func (d *Driver) GetVM() (*proxmox.VirtualMachine, error) {
 	if err2 != nil {
 		return nil, err2
 	}
-	d.debugf("GetVM returned VMID: '%s' with Status: '%s'", vm.VMID, vm.Status)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("GetVM returned", zap.String("VMID", strconv.FormatUint(uint64(vm.VMID), 10)), zap.String("Status", vm.Status))
 	return vm, err
 }
 
@@ -644,7 +635,7 @@ func (d *Driver) Create() error {
 		NewID:   newId,
 	}
 
-	d.debugf("cloning new vm from template id '%s'", d.CloneVMID)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("cloning new vm from template id", zap.String("CloneVMID", d.CloneVMID))
 
 	node, err := d.client.Node(context.Background(), d.Node)
 	if err != nil {
@@ -662,7 +653,7 @@ func (d *Driver) Create() error {
 	}
 
 	_, task, err := clonevm.Clone(context.Background(), clone)
-	d.debugf("clone task for new vmid '%d' created", newId)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("clone task for new vmid created", zap.Int("VMID", newId))
 
 	if err != nil {
 		return err
@@ -672,15 +663,15 @@ func (d *Driver) Create() error {
 	if err := task.Wait(context.Background(), d.taskInterval, d.taskTimeout); err != nil {
 		return err
 	}
-	d.debugf("clone finished for vmid '%d'", newId)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("clone finished for vmid", zap.Int("VMID", newId))
 
 	// explicity set vmid after clone completion to be sure
 	d.VMID = newId
 
-	d.debugf("vmid values VMID: '%d'", d.VMID)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("vmid values", zap.Int("VMID", d.VMID))
 
 	// resize
-	d.debugf("resizing disk '%s' on vmid '%s' to '%s'", "scsi0", d.VMID, d.DiskSize+"G")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("resizing disk", zap.String("disk", "scsi0"), zap.Int("VMID", d.VMID), zap.String("size", d.DiskSize+"G"))
 
 	vm, err4 := d.GetVM()
 	if err4 != nil {
@@ -695,7 +686,7 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	d.debugf("add misc configuration options")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("add misc configuration options")
 
 	d.ConfigureVM("agent", "1")
 	d.ConfigureVM("autostart", "1")
@@ -730,7 +721,7 @@ func (d *Driver) Create() error {
 	}
 
 	err3 := d.ConfigureVM("sshkeys", SSHKeys)
-	d.debugf("cloud-init sshkeys set to '%s'", SSHKeys)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("cloud-init sshkeys set to", zap.String("sshkeys", SSHKeys))
 	if err3 != nil {
 		return err3
 	}
@@ -747,14 +738,14 @@ func (d *Driver) Create() error {
 		return err
 	}
 
-	d.debugf("VM got an IP: %s", vmIp)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("VM got an IP", zap.String("ip", vmIp))
 
 	return nil
 }
 
 func (d *Driver) appendVmSshKeys(vm *proxmox.VirtualMachine) (string, error) {
 	// create and save a new SSH key pair
-	d.debug("creating new ssh keypair")
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("creating new ssh keypair")
 	key, err := d.createSSHKey()
 	if err != nil {
 		return "", err
@@ -783,7 +774,7 @@ func (d *Driver) appendVmSshKeys(vm *proxmox.VirtualMachine) (string, error) {
 	// specially handle setting sshkeys
 	// https://forum.proxmox.com/threads/how-to-use-pvesh-set-vms-sshkeys.52570/
 
-	d.debugf("retrieving existing cloud-init sshkeys from vmid '%s'", d.VMID)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("retrieving existing cloud-init sshkeys from vmid", zap.Int("VMID", d.VMID))
 
 	r := strings.NewReplacer("+", "%2B", "=", "%3D", "@", "%40")
 
@@ -847,8 +838,8 @@ func (d *Driver) Remove() error {
 		return vmStoppedErr
 	}
 
-	d.debugf("VM stopped status: %s", vmStoppedStatus)
-	d.debugf("VM stop completed: %s", vmStoppedCompleted)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("VM stopped status", zap.String("status", strconv.FormatBool(vmStoppedStatus)))
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("VM stop completed", zap.String("completed", strconv.FormatBool(vmStoppedCompleted)))
 
 	deleteTask, err4 := vm.Delete(context.Background())
 	if err4 != nil {
@@ -861,8 +852,8 @@ func (d *Driver) Remove() error {
 		return vmDelErr
 	}
 
-	d.debugf("VM delete status: %s", vmDelStatus)
-	d.debugf("VM delete completed: %s", vmDelCompleted)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("VM delete status", zap.String("status", strconv.FormatBool(vmDelStatus)))
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("VM delete completed", zap.String("completed", strconv.FormatBool(vmDelCompleted)))
 
 	return nil
 }
@@ -893,14 +884,14 @@ func (d *Driver) GetVmidInRange() (int, error) {
 
 func (d *Driver) createSSHKey() (string, error) {
 	var sshKeyPath = d.GetSSHKeyPath()
-	d.debugf("Creating SSH key at %s", sshKeyPath)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("Creating SSH key at", zap.String("path", sshKeyPath))
 
 	if err := ssh.GenerateSSHKey(sshKeyPath); err != nil {
 		return "", err
 	}
 
 	key, err := os.ReadFile(sshKeyPath + ".pub")
-	d.debugf("Read SSH key from %s: %s", sshKeyPath, key)
+	logger.Logger.With(zap.String("driver", "proxmoxve")).Debug("Read SSH key from", zap.String("path", sshKeyPath), zap.String("key", string(key)))
 	if err != nil {
 		return "", err
 	}
