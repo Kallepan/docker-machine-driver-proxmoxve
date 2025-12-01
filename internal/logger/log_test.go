@@ -1,30 +1,33 @@
-package logger_test
+package logger
 
 import (
 	"testing"
 
-	"github.com/deepshore/docker-machine-driver-proxmoxve/internal/logger"
+	"go.uber.org/zap/zapcore"
 )
 
-func TestInitCreatesLogger(t *testing.T) {
-	// Ensure fresh start
-	logger.Logger = nil
-
-	logger.Init()
-	if logger.Logger == nil {
-		t.Fatal("expected logger to be initialized, got nil")
+func TestGetZapLogLevel(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected zapcore.Level
+	}{
+		{"debug level", "debug", zapcore.DebugLevel},
+		{"info level", "info", zapcore.InfoLevel},
+		{"warn level", "warn", zapcore.WarnLevel},
+		{"error level", "error", zapcore.ErrorLevel},
+		{"dpanic level", "dpanic", zapcore.DPanicLevel},
+		{"panic level", "panic", zapcore.PanicLevel},
+		{"fatal level", "fatal", zapcore.FatalLevel},
+		{"invalid level defaults to info", "invalid", zapcore.InfoLevel},
 	}
-}
 
-func TestInitIsIdempotent(t *testing.T) {
-	logger.Logger = nil
-	logger.Init()
-	first := logger.Logger
-
-	logger.Init() // should not change the instance
-	second := logger.Logger
-
-	if first != second {
-		t.Fatal("expected Init() to be idempotent, but got different instances")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getZapLogLevel(tt.input)
+			if result != tt.expected {
+				t.Errorf("expected %v, got %v", tt.expected, result)
+			}
+		})
 	}
 }

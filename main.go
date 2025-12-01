@@ -7,7 +7,7 @@ import (
 
 func main() {
 	logger.Init()
-	defer logger.CallBackOnExit()
+	defer logger.Sync()
 
 	plugin.RegisterDriver(NewDriver("default", ""))
 }

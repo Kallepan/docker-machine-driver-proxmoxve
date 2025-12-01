@@ -11,8 +11,7 @@ import (
 
 func TestMain(m *testing.M) {
 	logger.Init()
-	defer logger.CallBackOnExit()
-
+	defer logger.Sync()
 	os.Exit(m.Run())
 }
 
